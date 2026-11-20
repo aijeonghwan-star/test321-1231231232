@@ -12,7 +12,7 @@ android {
         minSdk = 29          // 다른 앱의 재생 소리 캡처(AudioPlaybackCapture)는 Android 10+
         targetSdk = 35
         versionCode = 1
-        versionName = "1.0"
+        versionName = "1.1"
         ndk { abiFilters += listOf("arm64-v8a") }   // 요즘 폰 대부분 arm64. 용량 절감
     }
 

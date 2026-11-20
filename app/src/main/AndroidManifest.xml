@@ -11,7 +11,7 @@
     <application
         android:allowBackup="false"
         android:label="실시간 자막"
-        android:theme="@android:style/Theme.Material.Light">
+        android:theme="@android:style/Theme.Material.Light.NoActionBar">
 
         <activity
             android:name=".MainActivity"
