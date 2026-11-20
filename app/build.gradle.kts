@@ -13,6 +13,7 @@ android {
         targetSdk = 35
         versionCode = 1
         versionName = "1.0"
+        ndk { abiFilters += listOf("arm64-v8a") }   // 요즘 폰 대부분 arm64. 용량 절감
     }
 
     buildTypes {
