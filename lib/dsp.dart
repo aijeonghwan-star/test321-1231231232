@@ -257,3 +257,33 @@ Float32List decodeWav16k(Uint8List bytes) {
   }
   throw const FormatException('WAV 데이터가 없어요');
 }
+
+/// 16kHz 모노 float → PCM16 WAV 바이트
+Uint8List encodeWav16k(Float32List x) {
+  final n = x.length;
+  final out = Uint8List(44 + n * 2);
+  final bd = ByteData.sublistView(out);
+  void str(int o, String s) {
+    for (int i = 0; i < s.length; i++) {
+      out[o + i] = s.codeUnitAt(i);
+    }
+  }
+
+  str(0, 'RIFF');
+  bd.setUint32(4, 36 + n * 2, Endian.little);
+  str(8, 'WAVE');
+  str(12, 'fmt ');
+  bd.setUint32(16, 16, Endian.little);
+  bd.setUint16(20, 1, Endian.little); // PCM
+  bd.setUint16(22, 1, Endian.little); // mono
+  bd.setUint32(24, kSr, Endian.little);
+  bd.setUint32(28, kSr * 2, Endian.little);
+  bd.setUint16(32, 2, Endian.little);
+  bd.setUint16(34, 16, Endian.little);
+  str(36, 'data');
+  bd.setUint32(40, n * 2, Endian.little);
+  for (int i = 0; i < n; i++) {
+    bd.setInt16(44 + i * 2, (x[i].clamp(-1.0, 1.0) * 32767).round(), Endian.little);
+  }
+  return out;
+}

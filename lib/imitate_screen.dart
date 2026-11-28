@@ -1,53 +1,15 @@
 import 'dart:async';
-import 'dart:isolate';
 import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:record/record.dart';
 
+import 'add_target_screen.dart';
 import 'dsp.dart';
 import 'matcher.dart';
-
-/// 흉내 낼 목소리 하나
-class Target {
-  Target(this.name, this.asset, this.samples, this.frames, this.stats);
-  final String name;
-  final String asset; // assets/targets/xxx.wav
-  final Float32List samples;
-  final List<Frame> frames;
-  final VoiceStats? stats;
-  Float32List? embedding;
-  double get duration => samples.length / kSr;
-}
-
-Future<List<Target>> loadTargets() async {
-  final manifest = await AssetManifest.loadFromAssetBundle(rootBundle);
-  final assets = manifest
-      .listAssets()
-      .where((a) => a.startsWith('assets/targets/') && a.toLowerCase().endsWith('.wav'))
-      .toList()
-    ..sort();
-  final out = <Target>[];
-  for (final a in assets) {
-    final data = await rootBundle.load(a);
-    final samples = decodeWav16k(data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes));
-    final frames = await _analyzeInBackground(samples);
-    var file = a.split('/').last;
-    try {
-      file = Uri.decodeComponent(file);
-    } catch (_) {}
-    final name = file.replaceAll(RegExp(r'\.wav$', caseSensitive: false), '');
-    out.add(Target(name, a, samples, frames, VoiceStats.of(frames)));
-  }
-  return out;
-}
-
-/// 클로저가 samples만 붙잡도록 최상위 함수로 분리 (isolate로 보낼 수 있게)
-Future<List<Frame>> _analyzeInBackground(Float32List samples) =>
-    Isolate.run(() => smoothPitch(FeatureExtractor().add(samples)));
+import 'target_store.dart';
 
 class ImitateScreen extends StatefulWidget {
   const ImitateScreen({super.key});
@@ -96,7 +58,7 @@ class _ImitateScreenState extends State<ImitateScreen> {
 
   Future<void> _init() async {
     try {
-      final targets = await loadTargets();
+      final targets = await TargetStore.loadAll();
       final worker = EmbeddingWorker.instance(await speakerModelPath());
       setState(() {
         _targets = targets;
@@ -144,9 +106,45 @@ class _ImitateScreenState extends State<ImitateScreen> {
       await _player.stop();
       setState(() => _playing = false);
     } else {
-      await _player.play(AssetSource(t.asset.replaceFirst('assets/', '')));
+      await _player.play(t.source);
       setState(() => _playing = true);
     }
+  }
+
+  Future<void> _addTarget() async {
+    if (_recording) await _stop();
+    if (_playing) await _togglePlay();
+    if (!mounted) return;
+    final t = await Navigator.of(context).push<Target>(
+      MaterialPageRoute(builder: (_) => const AddTargetScreen()),
+    );
+    if (t == null) return;
+    setState(() {
+      _targets.removeWhere((x) => x.isUser && x.name == t.name); // 같은 이름은 교체
+      _targets.insert(0, t);
+      _select(t);
+    });
+  }
+
+  Future<void> _deleteTarget(Target t) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (c) => AlertDialog(
+        title: const Text('목소리 삭제'),
+        content: Text('"${t.name}"을(를) 삭제할까요?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('취소')),
+          FilledButton(onPressed: () => Navigator.pop(c, true), child: const Text('삭제')),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    await TargetStore.delete(t);
+    setState(() {
+      _targets.remove(t);
+      _target = null;
+      if (_targets.isNotEmpty) _select(_targets.first);
+    });
   }
 
   Future<void> _toggleRecord() async => _recording ? _stop() : _start();
@@ -244,7 +242,11 @@ class _ImitateScreenState extends State<ImitateScreen> {
     if (t == null) {
       return Center(
         child: _targets.isEmpty && _worker != null
-            ? const Text('assets/targets/ 폴더에 흉내 낼 목소리(wav)를 넣어 주세요.')
+            ? FilledButton.icon(
+                onPressed: _addTarget,
+                icon: const Icon(Icons.add),
+                label: const Text('흉내 낼 목소리 추가하기'),
+              )
             : const CircularProgressIndicator(),
       );
     }
@@ -254,13 +256,26 @@ class _ImitateScreenState extends State<ImitateScreen> {
         Row(children: [
           Expanded(
             child: DropdownButtonFormField<Target>(
+              key: ObjectKey(t),
               value: t,
               decoration: const InputDecoration(labelText: '흉내 낼 목소리', border: OutlineInputBorder()),
-              items: [for (final x in _targets) DropdownMenuItem(value: x, child: Text(x.name))],
+              isExpanded: true,
+              items: [
+                for (final x in _targets)
+                  DropdownMenuItem(
+                    value: x,
+                    child: Text(x.isUser ? x.name : '${x.name} (기본)', overflow: TextOverflow.ellipsis),
+                  ),
+              ],
               onChanged: _recording ? null : (x) => setState(() => _select(x!)),
             ),
           ),
-          const SizedBox(width: 8),
+          const SizedBox(width: 4),
+          IconButton(
+            onPressed: _addTarget,
+            icon: const Icon(Icons.add_circle_outline),
+            tooltip: '새 목소리 추가',
+          ),
           IconButton.filledTonal(
             iconSize: 32,
             onPressed: _togglePlay,
@@ -268,7 +283,16 @@ class _ImitateScreenState extends State<ImitateScreen> {
             tooltip: '타깃 목소리 듣기',
           ),
         ]),
-        const SizedBox(height: 12),
+        Row(children: [
+          Text('${t.duration.toStringAsFixed(1)}초', style: TextStyle(color: cs.outline, fontSize: 12)),
+          const Spacer(),
+          if (t.isUser)
+            TextButton.icon(
+              onPressed: _recording ? null : () => _deleteTarget(t),
+              icon: const Icon(Icons.delete_outline, size: 18),
+              label: const Text('이 목소리 삭제'),
+            ),
+        ]),
         _SimilarityCard(similarity: _similarity, recording: _recording),
         const SizedBox(height: 12),
         Row(children: [

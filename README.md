@@ -27,13 +27,21 @@
 | 음높이 | YIN 알고리즘 (60~500Hz) | `lib/dsp.dart` |
 | 음색 밝기 | FFT 스펙트럼 무게중심 (0~4kHz) | `lib/dsp.dart` |
 | 음색 유사도 | WeSpeaker ResNet34 화자 임베딩 + 코사인 유사도 (sherpa-onnx) | `lib/matcher.dart` |
-| 화면 | 흉내 연습 / 닮은꼴 찾기 | `lib/imitate_screen.dart`, `lib/match_screen.dart` |
+| 화면 | 흉내 연습 / 목소리 추가 / 닮은꼴 찾기 | `lib/imitate_screen.dart`, `lib/add_target_screen.dart`, `lib/match_screen.dart` |
+| 파일 디코딩·내부 소리 녹음 | MediaCodec, AudioPlaybackCapture (안드로이드 네이티브) | `native/android/*.kt` |
 
 AI 모델은 별도 isolate에서 한 번만 올려 두고 재사용하기 때문에 실시간 그래프가 끊기지 않습니다.
 
 ## 1. 흉내 낼 목소리 넣기
 
-PC에 ffmpeg와 파이썬이 있으면:
+**앱에서 바로 추가 (안드로이드)**: 흉내 연습 화면의 ⊕ 버튼을 눌러요.
+- **폰 소리 녹음**: 유튜브 등에서 재생되는 소리를 그대로 녹음 (안드로이드 10+, 최대 2분).
+  유튜브 앱이 녹음을 막으면 Chrome에서 youtube.com으로 재생해 보세요
+- **파일에서 가져오기**: mp3, m4a, wav, mp4 영상 등
+- **마이크로 녹음**: 아이폰에서도 됩니다
+- 가져온 뒤 파형을 보며 5~20초 구간을 골라 미리 듣고 저장합니다. 추가한 목소리는 앱에 계속 남고, 삭제도 할 수 있어요
+
+**앱에 기본으로 넣기**: PC에 ffmpeg와 파이썬이 있으면:
 
 ```bash
 pip install numpy
