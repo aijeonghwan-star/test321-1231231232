@@ -91,7 +91,11 @@ class CaptureService : Service() {
             intent.getParcelableExtra("data")
         }
         val mpm = getSystemService(MediaProjectionManager::class.java)
-        val proj = mpm.getMediaProjection(intent.getIntExtra("code", 0), data!!)
+        val proj = data?.let { mpm.getMediaProjection(intent.getIntExtra("code", 0), it) }
+        if (proj == null) {
+            stopSelf()
+            return START_NOT_STICKY
+        }
         projection = proj
         proj.registerCallback(object : MediaProjection.Callback() {
             override fun onStop() {
