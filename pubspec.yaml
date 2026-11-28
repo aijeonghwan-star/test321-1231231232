@@ -1,0 +1,26 @@
+name: voice_match
+description: 타깃 목소리를 실시간 그래프로 비교하며 흉내 내는 연습 앱 (온디바이스 분석)
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: ">=3.2.0 <4.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  sherpa_onnx: 2.0.3
+  record: ^6.2.0
+  audioplayers: ^6.1.0
+  path_provider: ^2.1.3
+  path: ^1.9.0
+
+dev_dependencies:
+  flutter_lints: ^4.0.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/models/speaker.onnx
+    - assets/voice_db.json
+    - assets/targets/
